@@ -127,7 +127,7 @@ export default function DocsPage() {
             <h2 className="text-4xl font-headline font-bold text-gradient">The Alpha: WLC Algorithm</h2>
             <span className="px-4 py-1 bg-white/5 border border-white/10 rounded-full text-xs font-mono text-primary w-fit">ALGO_VER: 2.0.4</span>
           </div>
-          <div class="grid grid-cols-1 lg:grid-cols-2 gap-12">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
             <div className="space-y-8">
               <div className="glass-pane p-8 rounded-2xl border border-white/10">
                 <h4 className="text-sm font-mono text-primary mb-4 uppercase tracking-widest">Normalized Metrics</h4>
