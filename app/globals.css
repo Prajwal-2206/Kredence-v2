@@ -1,0 +1,133 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@theme {
+  --color-surface-container-high: #23293c;
+  --color-on-background: #dce1fb;
+  --color-inverse-surface: #dce1fb;
+  --color-tertiary-container: #cfdaf2;
+  --color-surface-bright: #33394c;
+  --color-surface-container-low: #151b2d;
+  --color-on-primary-container: #006970;
+  --color-on-primary: #00363a;
+  --color-on-surface-variant: #b9cacb;
+  --color-secondary-fixed-dim: #ddb7ff;
+  --color-primary: #dbfcff;
+  --color-secondary-fixed: #f0dbff;
+  --color-tertiary: #f4f6ff;
+  --color-on-tertiary-fixed: #111c2d;
+  --color-surface-dim: #0c1324;
+  --color-tertiary-fixed-dim: #bcc7de;
+  --color-on-secondary-fixed-variant: #6900b3;
+  --color-outline: #849495;
+  --color-surface-variant: #2e3447;
+  --color-primary-container: #00f0ff;
+  --color-inverse-primary: #006970;
+  --color-surface-container-highest: #2e3447;
+  --color-on-secondary: #490080;
+  --color-on-secondary-container: #d6a9ff;
+  --color-inverse-on-surface: #2a3043;
+  --color-on-error-container: #ffdad6;
+  --color-secondary-container: #6f00be;
+  --color-on-error: #690005;
+  --color-tertiary-fixed: #d8e3fb;
+  --color-surface-tint: #00dbe9;
+  --color-on-tertiary-container: #545f73;
+  --color-surface-container-lowest: #070d1f;
+  --color-on-tertiary-fixed-variant: #3c475a;
+  --color-background: #0c1324;
+  --color-error-container: #93000a;
+  --color-on-secondary-fixed: #2c0051;
+  --color-error: #ffb4ab;
+  --color-on-primary-fixed-variant: #004f54;
+  --color-secondary: #ddb7ff;
+  --color-primary-fixed-dim: #00dbe9;
+  --color-surface: #0c1324;
+  --color-primary-fixed: #7df4ff;
+  --color-surface-container: #191f31;
+  --color-on-primary-fixed: #002022;
+  --color-on-tertiary: #263143;
+  --color-outline-variant: #3b494b;
+  --color-on-surface: #dce1fb;
+
+  --font-headline: 'Space Grotesk', sans-serif;
+  --font-body: 'Inter', sans-serif;
+  --font-label: 'Inter', sans-serif;
+}
+
+:root {
+  /* Retain core shadcn vars to avoid total breakage */
+  --background: 226 50% 10%; /* Approximation based on surface color #0c1324 */
+  --foreground: 231 60% 92%; /* Approximation of on-background */
+  --radius: 0.5rem;
+}
+
+@layer base {
+  body {
+    background-color: var(--color-background);
+    color: var(--color-on-surface);
+  }
+}
+
+@layer components {
+    .glass-edge {
+        background: linear-gradient(180deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0) 100%);
+    }
+    .neon-mesh {
+        background-color: #0c1324;
+        background-image: 
+            radial-gradient(at 0% 0%, #151b2d 0, transparent 50%), 
+            radial-gradient(at 50% 0%, #6f00be22 0, transparent 50%), 
+            radial-gradient(at 100% 0%, #00f0ff11 0, transparent 50%);
+    }
+    .text-gradient {
+        background: linear-gradient(135deg, #dbfcff 0%, #ddb7ff 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+    }
+    .glass-pane {
+        background: rgba(25, 31, 49, 0.4);
+        backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
+        border-top: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    .neon-shadow-cyan { box-shadow: 0 0 20px rgba(0, 240, 255, 0.15); }
+    .neon-shadow-purple { box-shadow: 0 10px 40px rgba(111, 0, 190, 0.1); }
+    .neon-shadow-pink { box-shadow: 0 0 25px rgba(221, 183, 255, 0.12); }
+    
+    .gauge-path {
+        stroke-dasharray: 100 100;
+        stroke-dashoffset: 25;
+        transition: stroke-dashoffset 1s ease-out;
+    }
+
+    .perspective-1000 {
+        perspective: 1000px;
+    }
+    .preserve-3d {
+        transform-style: preserve-3d;
+    }
+    .hover-tilt:hover {
+        transform: rotateX(10deg) rotateY(10deg);
+    }
+    .glass-highlight {
+        background: linear-gradient(135deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.05) 50%, transparent 100%);
+    }
+
+    .material-symbols-outlined {
+        font-family: 'Material Symbols Outlined';
+        font-weight: normal;
+        font-style: normal;
+        font-size: 24px;
+        line-height: 1;
+        letter-spacing: normal;
+        text-transform: none;
+        display: inline-block;
+        white-space: nowrap;
+        word-wrap: normal;
+        direction: ltr;
+        -webkit-font-smoothing: antialiased;
+        font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+    }
+}
