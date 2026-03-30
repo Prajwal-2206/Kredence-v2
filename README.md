@@ -127,10 +127,3 @@ MIT License. Build cool shit, don't steal the vibe without credit.
 
 -----
 
-###  What's next?
-
-This README is engineered to flex on anyone who lands on your GitHub. Since you've got the frontend designs from Stitch and the plan for the Alchemy/Snapshot backend, the final hurdle is literally just putting the pieces together in your `D:\` drive.
-
-**Are you ready to dive into the actual Next.js `route.ts` code to get that Alchemy API fetching your transfer history, or do you need me to draft the SWR/React Query hooks for the frontend first?**
-
-on](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
