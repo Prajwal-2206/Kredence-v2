@@ -1,7 +1,7 @@
 import { createPublicClient, http, parseAbi } from 'viem';
 import { mainnet, arbitrum } from 'viem/chains';
 
-const ALCHEMY_KEY = process.env.ALCHEMY_API_KEY || "EiTDJYuKpalOvRb0kjdNy";
+const ALCHEMY_KEY = process.env.ALCHEMY_API_KEY ?? "";
 
 const ethClient = createPublicClient({
   chain: mainnet,

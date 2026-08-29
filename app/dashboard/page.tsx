@@ -124,10 +124,6 @@ function DashboardContent() {
                 </p>
                 <div className="mt-6 flex gap-4">
                   <div className="bg-surface-container-lowest px-4 py-2 rounded-xl border border-white/5">
-                    <div className="text-[10px] text-outline uppercase">Global Rank</div>
-                    <div className="text-lg font-headline font-bold text-secondary">#{Math.floor(Math.random() * 5000) + 100}</div>
-                  </div>
-                  <div className="bg-surface-container-lowest px-4 py-2 rounded-xl border border-white/5">
                     <div className="text-[10px] text-outline uppercase">Percentile</div>
                     <div className="text-lg font-headline font-bold text-primary-container">Top {Math.max((1 - scoreFraction) * 100, 0.1).toFixed(1)}%</div>
                   </div>
@@ -222,7 +218,7 @@ function DashboardContent() {
                   <div className="flex items-center gap-4 text-xs font-label text-on-surface-variant uppercase tracking-widest">
                     <span>Analysis Engine: K-Alpha v2.1</span>
                     <span className="w-1 h-1 rounded-full bg-outline"></span>
-                    <span>Confidence Score: {(Math.random() * 5 + 94).toFixed(1)}%</span>
+                    <span>Data Points: {txCount} transactions</span>
                   </div>
                 </div>
                 

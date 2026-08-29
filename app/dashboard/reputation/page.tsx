@@ -5,7 +5,6 @@ import { useEffect, useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { motion, Variants } from "framer-motion";
 import { Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, ResponsiveContainer } from "recharts";
-import { getDeterministicIdentity } from "@/lib/mockIdentityData";
 
 export default function ReputationPage() {
   return (
@@ -19,16 +18,25 @@ export default function ReputationPage() {
   );
 }
 
+interface AlchemyData {
+  walletAgeDays: number;
+  protocols: {
+    uniswap: number;
+    aave: number;
+    lido: number;
+  };
+}
+
 function ReputationContent() {
   const { address: connectedAddress } = useAccount();
   const searchParams = useSearchParams();
   const searchAddress = searchParams?.get("address");
-  
+
   const address = searchAddress || connectedAddress;
 
   const [loading, setLoading] = useState(true);
-  const [repData, setRepData] = useState<any>(null);
-  const [alchemyData, setAlchemyData] = useState<any>(null);
+  const [alchemyData, setAlchemyData] = useState<AlchemyData | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!address) {
@@ -38,20 +46,19 @@ function ReputationContent() {
 
     const fetchData = async () => {
       setLoading(true);
+      setError(null);
       try {
-        // Fetch Mock/Deterministic ID Data
-        const identity = getDeterministicIdentity(address);
-        setRepData(identity);
-
-        // Fetch Live Alchemy Data
         const res = await fetch(`/api/reputation?address=${address}`);
         const data = await res.json();
-        
-        if (!data.error) {
+
+        if (data.error) {
+          setError(data.error);
+        } else {
           setAlchemyData(data);
         }
       } catch (err) {
         console.error(err);
+        setError("Failed to connect to the server.");
       } finally {
         setLoading(false);
       }
@@ -60,7 +67,6 @@ function ReputationContent() {
     fetchData();
   }, [address]);
 
-  // Framer Motion Variants
   const containerVariants: Variants = {
     hidden: { opacity: 0 },
     show: {
@@ -86,36 +92,47 @@ function ReputationContent() {
     );
   }
 
-  if (loading || !repData) {
+  if (loading) {
     return (
       <main className="lg:ml-64 pt-24 pb-12 px-8 min-h-screen flex flex-col items-center justify-center">
         <div className="w-16 h-16 border-4 border-secondary/20 border-t-secondary rounded-full animate-spin"></div>
-        <p className="mt-4 font-headline text-secondary tracking-widest uppercase text-sm animate-pulse">Syncing Graph Data...</p>
+        <p className="mt-4 font-headline text-secondary tracking-widest uppercase text-sm animate-pulse">Querying On-Chain Data...</p>
       </main>
     );
   }
 
-  // Derive final values from both inputs
-  const walletAge = alchemyData?.walletAgeDays || 21;
-  const uniswapVol = alchemyData?.protocols?.uniswap || 0;
-  const aaveVol = alchemyData?.protocols?.aave || 0;
-  const lidoVol = alchemyData?.protocols?.lido || 0;
-  
-  // Create deterministic fallback values for total volume if alchemy drops
-  const totalVerifiedVol = Math.max(uniswapVol + aaveVol + lidoVol, 15000 + parseFloat(repData.trustScore) * 1000);
+  if (error) {
+    return (
+      <main className="lg:ml-64 pt-24 pb-12 px-8 min-h-screen">
+        <div className="bg-error/10 border border-error/20 rounded-2xl p-6 max-w-2xl mx-auto mt-12 text-center text-error">
+          <span className="material-symbols-outlined text-4xl mb-2">warning</span>
+          <h3 className="text-xl font-bold font-headline mb-2">Analysis Failed</h3>
+          <p>{error}</p>
+        </div>
+      </main>
+    );
+  }
 
-  // Derive groupings for badges
-  const groupedBadges = repData.badges.reduce((acc: any, badge: any) => {
-    if (!acc[badge.group]) acc[badge.group] = [];
-    acc[badge.group].push(badge);
-    return acc;
-  }, {});
+  const walletAge = alchemyData?.walletAgeDays ?? 0;
+  const uniswapVol = alchemyData?.protocols?.uniswap ?? 0;
+  const aaveVol = alchemyData?.protocols?.aave ?? 0;
+  const lidoVol = alchemyData?.protocols?.lido ?? 0;
+  const totalVol = uniswapVol + aaveVol + lidoVol;
+  const hasActivity = totalVol > 0 || walletAge > 1;
 
-  const badgeGroups = Object.entries(groupedBadges).map(([group, badges]) => ({ group, badges }));
+  // Radar data derived from real protocol volumes (normalized to 0-100 scale)
+  const maxVol = Math.max(uniswapVol, aaveVol, lidoVol, 1);
+  const radarData = [
+    { subject: 'Uniswap', A: Math.min((uniswapVol / maxVol) * 100, 100), fullMark: 100 },
+    { subject: 'Aave', A: Math.min((aaveVol / maxVol) * 100, 100), fullMark: 100 },
+    { subject: 'Lido', A: Math.min((lidoVol / maxVol) * 100, 100), fullMark: 100 },
+    { subject: 'Wallet Age', A: Math.min(walletAge / 10, 100), fullMark: 100 },
+    { subject: 'Diversity', A: [uniswapVol, aaveVol, lidoVol].filter(v => v > 0).length * 33, fullMark: 100 },
+  ];
 
   return (
     <main className="lg:ml-64 pt-24 pb-12 px-10 min-h-screen">
-      <motion.header 
+      <motion.header
         variants={itemVariants}
         initial="hidden"
         animate="show"
@@ -124,7 +141,7 @@ function ReputationContent() {
         <div className="max-w-2xl">
           <div className="flex items-center space-x-3 mb-4">
             <span className="w-3 h-3 rounded-full bg-primary-container shadow-[0_0_10px_#00f0ff]"></span>
-            <span className="text-primary tracking-widest text-xs font-headline font-bold uppercase">Human Verified Identity</span>
+            <span className="text-primary tracking-widest text-xs font-headline font-bold uppercase">On-Chain Reputation</span>
           </div>
           <h1 className="text-4xl md:text-5xl lg:text-6xl font-headline font-extrabold text-white leading-none mb-6">
             <span className="bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent italic break-all">
@@ -133,182 +150,128 @@ function ReputationContent() {
           </h1>
           <div className="flex flex-wrap gap-4">
             <div className="flex items-center space-x-2 glass-pane px-4 py-2 rounded-full border border-white/5">
-              <span className="text-secondary font-bold">{repData.lensFollowers}</span>
-              <span className="text-on-surface-variant text-xs font-medium">Lens Followers</span>
+              <span className="text-secondary font-bold">{walletAge}</span>
+              <span className="text-on-surface-variant text-xs font-medium">Days Active</span>
             </div>
             <div className="flex items-center space-x-2 glass-pane px-4 py-2 rounded-full border border-white/5">
-              <span className="text-primary-container font-bold">FID: {repData.farcasterId}</span>
-              <span className="text-on-surface-variant text-xs font-medium">Farcaster</span>
+              <span className="text-primary-container font-bold">{[uniswapVol, aaveVol, lidoVol].filter(v => v > 0).length}</span>
+              <span className="text-on-surface-variant text-xs font-medium">Protocols Used</span>
             </div>
-          </div>
-        </div>
-        
-        <div className="glass-pane p-6 rounded-2xl flex items-center space-x-8 neon-shadow-purple border border-white/5">
-          <div className="text-center">
-            <p className="text-3xl font-headline font-bold text-white">{repData.trustScore}</p>
-            <p className="text-[10px] text-on-surface-variant uppercase tracking-tighter">Trust Score</p>
-          </div>
-          <div className="h-10 w-[1px] bg-white/10"></div>
-          <div className="text-center">
-            <p className="text-3xl font-headline font-bold text-secondary">{repData.sybilGrade}</p>
-            <p className="text-[10px] text-on-surface-variant uppercase tracking-tighter">Sybil Grade</p>
           </div>
         </div>
       </motion.header>
 
-      <motion.div 
-        variants={containerVariants}
-        initial="hidden"
-        animate="show"
-        className="grid grid-cols-1 lg:grid-cols-12 gap-6"
-      >
-        {/* Radar Chart Section */}
-        <motion.section variants={itemVariants} className="col-span-12 lg:col-span-7 glass-pane rounded-3xl p-8 relative overflow-hidden h-[500px] border border-white/5 neon-shadow-cyan">
-          <div className="relative z-10">
-            <h3 className="text-xl font-headline font-bold text-white mb-2">Sybil Resistance Matrix</h3>
-            <p className="text-on-surface-variant text-sm max-w-sm">Multidimensional analysis of wallet behavior and funding providence.</p>
-          </div>
-          
-          <div className="absolute inset-0 flex items-center justify-center pt-10">
-            <ResponsiveContainer width="90%" height="90%">
-              <RadarChart cx="50%" cy="50%" outerRadius="70%" data={repData.radarData}>
-                <PolarGrid stroke="rgba(255, 255, 255, 0.1)" />
-                <PolarAngleAxis 
-                  dataKey="subject" 
-                  tick={{ fill: '#b9cacb', fontSize: 10, fontWeight: 'bold', textAnchor: 'middle' }} 
-                />
-                <PolarRadiusAxis angle={30} domain={[0, 100]} tick={false} axisLine={false} />
-                <Radar 
-                  name="Identity Profile" 
-                  dataKey="A" 
-                  stroke="#00f0ff" 
-                  fill="rgba(0, 240, 255, 0.25)" 
-                  fillOpacity={0.8} 
-                  activeDot={{ r: 6, fill: '#dbfcff', stroke: '#00f0ff', strokeWidth: 2 }}
-                />
-              </RadarChart>
-            </ResponsiveContainer>
-          </div>
-          
-          <div className="absolute bottom-8 right-8 glass-pane bg-primary-container/10 border border-primary-container/20 px-6 py-3 rounded-2xl flex items-center space-x-3 backdrop-blur-md">
-            <span className="material-symbols-outlined text-primary-container">shield_person</span>
+      {!hasActivity ? (
+        <motion.div
+          variants={itemVariants}
+          initial="hidden"
+          animate="show"
+          className="flex flex-col items-center justify-center h-[40vh] text-center"
+        >
+          <span className="material-symbols-outlined text-6xl text-on-surface-variant mb-4">search_off</span>
+          <h2 className="text-2xl font-headline font-bold mb-2">No Protocol Activity Found</h2>
+          <p className="text-tertiary/60 max-w-md">This wallet has no recorded interactions with Uniswap, Aave, or Lido on Ethereum Mainnet.</p>
+        </motion.div>
+      ) : (
+        <motion.div
+          variants={containerVariants}
+          initial="hidden"
+          animate="show"
+          className="grid grid-cols-1 lg:grid-cols-12 gap-6"
+        >
+          {/* Radar Chart Section */}
+          <motion.section variants={itemVariants} className="col-span-12 lg:col-span-7 glass-pane rounded-3xl p-8 relative overflow-hidden h-[500px] border border-white/5 neon-shadow-cyan">
+            <div className="relative z-10">
+              <h3 className="text-xl font-headline font-bold text-white mb-2">Protocol Interaction Matrix</h3>
+              <p className="text-on-surface-variant text-sm max-w-sm">Multidimensional analysis of DeFi protocol engagement depth.</p>
+            </div>
+
+            <div className="absolute inset-0 flex items-center justify-center pt-10">
+              <ResponsiveContainer width="90%" height="90%">
+                <RadarChart cx="50%" cy="50%" outerRadius="70%" data={radarData}>
+                  <PolarGrid stroke="rgba(255, 255, 255, 0.1)" />
+                  <PolarAngleAxis
+                    dataKey="subject"
+                    tick={{ fill: '#b9cacb', fontSize: 10, fontWeight: 'bold', textAnchor: 'middle' }}
+                  />
+                  <PolarRadiusAxis angle={30} domain={[0, 100]} tick={false} axisLine={false} />
+                  <Radar
+                    name="Protocol Profile"
+                    dataKey="A"
+                    stroke="#00f0ff"
+                    fill="rgba(0, 240, 255, 0.25)"
+                    fillOpacity={0.8}
+                    activeDot={{ r: 6, fill: '#dbfcff', stroke: '#00f0ff', strokeWidth: 2 }}
+                  />
+                </RadarChart>
+              </ResponsiveContainer>
+            </div>
+          </motion.section>
+
+          {/* Protocol Trust Tiers */}
+          <motion.section variants={itemVariants} className="col-span-12 lg:col-span-5 glass-pane rounded-3xl p-8 flex flex-col justify-between border border-white/5 neon-shadow-purple">
             <div>
-              <p className="text-xs font-bold text-white uppercase tracking-wider">Status</p>
-              <p className="text-lg font-headline font-bold text-primary-container">Verified Human</p>
+              <h3 className="text-xl font-headline font-bold text-white mb-2">Protocol Trust Tiers</h3>
+              <p className="text-on-surface-variant text-sm mb-8">Interaction depth across major liquidity layers.</p>
             </div>
-          </div>
-        </motion.section>
 
-        {/* Protocol Trust Tiers */}
-        <motion.section variants={itemVariants} className="col-span-12 lg:col-span-5 glass-pane rounded-3xl p-8 flex flex-col justify-between border border-white/5 neon-shadow-purple">
-          <div>
-            <h3 className="text-xl font-headline font-bold text-white mb-2">Protocol Trust Tiers</h3>
-            <p className="text-on-surface-variant text-sm mb-8">Interaction depth across major liquidity layers.</p>
-          </div>
-          
-          <div className="space-y-4">
-            <motion.div whileHover={{ scale: 1.02 }} className="flex items-center justify-between p-4 rounded-2xl bg-white/5 border border-white/5 hover:bg-white/10 transition-all cursor-pointer">
-              <div className="flex items-center space-x-4">
-                <div className="w-10 h-10 rounded-full bg-surface-container flex items-center justify-center border border-white/10">
-                  <img src="https://lh3.googleusercontent.com/aida-public/AB6AXuBBBY079J9R1Iz8Fnx26XogF6KkGsQyHy_5dp17TJwztiXe7UUJ4iz4BnUO_jDJ5Vt5bm_7547G7FWHBYZREBhASry7xsiMZxknhfvZpHZZieeE9_lgEcfjivv0M0fPpZ0D0ViT1fBzECPLaf9kFECcjsdIH3K2J7tYQYKVk3klIOQc2GV82QPlSYsj0n36cc8nSLCXX3oLZQxdNQG4g56oeWEIgTfbvVg9GkBeX2RyNBLVIkmY6DOt97ns89jOjyFewNQy5k_0WjrC" className="w-6 h-6" alt="Uniswap"/>
-                </div>
-                <div>
-                  <p className="text-white font-medium">Uniswap</p>
-                  <p className="text-xs text-on-surface-variant">LPs & Swaps</p>
-                </div>
-              </div>
-              <div className="text-right">
-                <p className="text-primary font-headline font-bold">${uniswapVol ? uniswapVol.toLocaleString() : "14.2M"}</p>
-                <p className="text-[10px] uppercase text-on-surface-variant tracking-tighter">Volume</p>
-              </div>
-            </motion.div>
-
-            <motion.div whileHover={{ scale: 1.02 }} className="flex items-center justify-between p-4 rounded-2xl bg-white/5 border border-white/5 hover:bg-white/10 transition-all cursor-pointer">
-              <div className="flex items-center space-x-4">
-                <div className="w-10 h-10 rounded-full bg-surface-container flex items-center justify-center border border-white/10">
-                  <img src="https://lh3.googleusercontent.com/aida-public/AB6AXuDfN4nBMkkdut0hXPs01c9LZnfiOV2K1BEjM3SxPyfDr3-moNHnvnSTQTE46-yKfGmMcxgV1vbszsbEsD0frGTfy4CmxyIMoC-MVFMg1ps7Hj-iRe3skBix4A9Tsm1R_OqWzTfURZkTcQdHi8c5qD12MJWvB0Ge0Q-9Ef1fewq2vzien0g188bZwzm-c8Y_uPwZe5B07tDSQtKQKD2eZgd9qnPLgM_FRoAXkHLY2MDEl5tGhkoYTDJwMa0_M4-VG55QwpuE9vZXC_ZF" className="w-6 h-6" alt="Aave"/>
-                </div>
-                <div>
-                  <p className="text-white font-medium">Aave</p>
-                  <p className="text-xs text-on-surface-variant">Borrow/Lend</p>
-                </div>
-              </div>
-              <div className="text-right">
-                <p className="text-primary font-headline font-bold">${aaveVol ? aaveVol.toLocaleString() : "2.8M"}</p>
-                <p className="text-[10px] uppercase text-on-surface-variant tracking-tighter">Volume</p>
-              </div>
-            </motion.div>
-
-            <motion.div whileHover={{ scale: 1.02 }} className="flex items-center justify-between p-4 rounded-2xl bg-white/5 border border-white/5 hover:bg-white/10 transition-all cursor-pointer">
-              <div className="flex items-center space-x-4">
-                <div className="w-10 h-10 rounded-full bg-surface-container flex items-center justify-center border border-white/10">
-                  <img src="https://lh3.googleusercontent.com/aida-public/AB6AXuBHaJoeLhshWYDDniGgkcpKB0HxQqSBh7upHxTbkZF3QIj_vZdnsn_71yICohza8yW_fpjNcGU3915aMvudHiaW9LSfL6ztHHqvQ7hFa4u5bmZlchSZimZ99gBf09gwfgPIsdwuxMlMxfKraZUkju8yAB0BEqy0QWEDzy2B4zUTsmtW8faog-xF8mS4hi8k0KCJqyr5R-xWRygR6eAewDLETjpRS5w70YD3qeacQbEJonA2_dL9_BTD4_XtUc1Kr9dGByituEM4KYIX" className="w-6 h-6" alt="Lido"/>
-                </div>
-                <div>
-                  <p className="text-white font-medium">Lido</p>
-                  <p className="text-xs text-on-surface-variant">Liquid Staking</p>
-                </div>
-              </div>
-              <div className="text-right">
-                <p className="text-primary font-headline font-bold">${lidoVol ? lidoVol.toLocaleString() : "124.5k"}</p>
-                <p className="text-[10px] uppercase text-on-surface-variant tracking-tighter">Staked</p>
-              </div>
-            </motion.div>
-          </div>
-          
-          <div className="mt-8 pt-6 border-t border-white/5 flex justify-between items-center">
-            <span className="text-xs text-on-surface-variant">Total Verified Volume</span>
-            <span className="text-2xl font-headline font-bold text-white">${totalVerifiedVol.toLocaleString()}</span>
-          </div>
-        </motion.section>
-
-        {/* Achievement Grid */}
-        <motion.section variants={itemVariants} className="col-span-12 glass-pane rounded-3xl p-8 border border-white/5">
-          <div className="flex justify-between items-center mb-10">
-            <div>
-              <h3 className="text-xl font-headline font-bold text-white mb-2">Achievement Grid</h3>
-              <p className="text-on-surface-variant text-sm">Soulbound credentials and attestation history.</p>
-            </div>
-            <div className="flex space-x-2">
-              <button className="bg-white/10 px-4 py-2 rounded-lg text-xs font-bold text-white hover:bg-white/20 transition-all">All Badges</button>
-              <button className="px-4 py-2 rounded-lg text-xs font-bold text-on-surface-variant hover:bg-white/5 transition-all">Recent</button>
-            </div>
-          </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {badgeGroups.map((bg: any, index: number) => {
-              const themeColor = index === 0 ? "secondary" : index === 1 ? "primary" : "error";
-              
-              return (
-                <div key={bg.group} className="space-y-6">
-                  <div className="flex items-center space-x-2">
-                    <span className={`material-symbols-outlined text-${themeColor} text-lg`}>
-                      {index === 0 ? 'code' : index === 1 ? 'rocket_launch' : 'local_fire_department'}
-                    </span>
-                    <h4 className={`text-sm font-headline font-bold uppercase tracking-widest text-${themeColor}`}>{bg.group}</h4>
+            <div className="space-y-4">
+              <motion.div whileHover={{ scale: 1.02 }} className="flex items-center justify-between p-4 rounded-2xl bg-white/5 border border-white/5 hover:bg-white/10 transition-all cursor-pointer">
+                <div className="flex items-center space-x-4">
+                  <div className="w-10 h-10 rounded-full bg-surface-container flex items-center justify-center border border-white/10">
+                    <span className="material-symbols-outlined text-primary">swap_horiz</span>
                   </div>
-                  <div className="grid grid-cols-4 gap-4">
-                    {bg.badges.map((badge: any) => (
-                      <motion.div 
-                        key={badge.id}
-                        whileHover={{ scale: 1.05 }}
-                        className="aspect-square glass-pane rounded-xl flex items-center justify-center cursor-pointer relative group border border-white/5"
-                        title={badge.title}
-                      >
-                        <img src={badge.image} className="w-10 h-10 grayscale group-hover:grayscale-0 transition-all duration-300" alt={badge.title} />
-                        <div className={`absolute inset-0 bg-${themeColor}/10 opacity-0 group-hover:opacity-100 rounded-xl transition-all shadow-[0_0_15px_rgba(var(--${themeColor}),0.3)] pointer-events-none`}></div>
-                      </motion.div>
-                    ))}
-                    <div className="aspect-square border border-white/5 bg-black/20 rounded-xl flex items-center justify-center text-xs text-on-surface-variant font-bold hover:bg-white/5 transition-colors cursor-pointer">
-                      +{(Math.abs(walletAge - bg.badges.length) % 5) + 1}
-                    </div>
+                  <div>
+                    <p className="text-white font-medium">Uniswap</p>
+                    <p className="text-xs text-on-surface-variant">LPs & Swaps</p>
                   </div>
                 </div>
-              );
-            })}
-          </div>
-        </motion.section>
-      </motion.div>
+                <div className="text-right">
+                  <p className="text-primary font-headline font-bold">{uniswapVol > 0 ? `${uniswapVol.toFixed(2)} ETH` : "No activity"}</p>
+                  <p className="text-[10px] uppercase text-on-surface-variant tracking-tighter">Volume</p>
+                </div>
+              </motion.div>
+
+              <motion.div whileHover={{ scale: 1.02 }} className="flex items-center justify-between p-4 rounded-2xl bg-white/5 border border-white/5 hover:bg-white/10 transition-all cursor-pointer">
+                <div className="flex items-center space-x-4">
+                  <div className="w-10 h-10 rounded-full bg-surface-container flex items-center justify-center border border-white/10">
+                    <span className="material-symbols-outlined text-secondary">account_balance</span>
+                  </div>
+                  <div>
+                    <p className="text-white font-medium">Aave</p>
+                    <p className="text-xs text-on-surface-variant">Borrow/Lend</p>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <p className="text-primary font-headline font-bold">{aaveVol > 0 ? `${aaveVol.toFixed(2)} ETH` : "No activity"}</p>
+                  <p className="text-[10px] uppercase text-on-surface-variant tracking-tighter">Volume</p>
+                </div>
+              </motion.div>
+
+              <motion.div whileHover={{ scale: 1.02 }} className="flex items-center justify-between p-4 rounded-2xl bg-white/5 border border-white/5 hover:bg-white/10 transition-all cursor-pointer">
+                <div className="flex items-center space-x-4">
+                  <div className="w-10 h-10 rounded-full bg-surface-container flex items-center justify-center border border-white/10">
+                    <span className="material-symbols-outlined text-tertiary">water_drop</span>
+                  </div>
+                  <div>
+                    <p className="text-white font-medium">Lido</p>
+                    <p className="text-xs text-on-surface-variant">Liquid Staking</p>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <p className="text-primary font-headline font-bold">{lidoVol > 0 ? `${lidoVol.toFixed(2)} ETH` : "No activity"}</p>
+                  <p className="text-[10px] uppercase text-on-surface-variant tracking-tighter">Staked</p>
+                </div>
+              </motion.div>
+            </div>
+
+            <div className="mt-8 pt-6 border-t border-white/5 flex justify-between items-center">
+              <span className="text-xs text-on-surface-variant">Total Protocol Volume</span>
+              <span className="text-2xl font-headline font-bold text-white">{totalVol > 0 ? `${totalVol.toFixed(2)} ETH` : "0 ETH"}</span>
+            </div>
+          </motion.section>
+        </motion.div>
+      )}
     </main>
   );
 }
