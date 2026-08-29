@@ -33,13 +33,13 @@ export async function getLiveGovernancePower(address: string) {
         abi: VotesAbi,
         functionName: 'getVotes',
         args: [formattedAddress]
-      }).catch(() => 0n),
+      }).catch(() => BigInt(0)),
       arbClient.readContract({
         address: ARB_ADDR,
         abi: VotesAbi,
         functionName: 'getVotes',
         args: [formattedAddress]
-      }).catch(() => 0n)
+      }).catch(() => BigInt(0))
     ]);
 
     // UNI and ARB both use 18 decimals
