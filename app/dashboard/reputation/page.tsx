@@ -18,13 +18,18 @@ export default function ReputationPage() {
   );
 }
 
+interface ProtocolTally {
+  uniswap: number;
+  aave: number;
+  lido: number;
+}
+
 interface AlchemyData {
   walletAgeDays: number;
-  protocols: {
-    uniswap: number;
-    aave: number;
-    lido: number;
-  };
+  /** Native ETH sent to each protocol. */
+  protocols: ProtocolTally;
+  /** Transfers touching each protocol, token movements included. */
+  interactions?: ProtocolTally;
 }
 
 function ReputationContent() {
@@ -52,7 +57,7 @@ function ReputationContent() {
         const data = await res.json();
 
         if (data.error) {
-          setError(data.error);
+          setError(data.details ? `${data.error}: ${data.details}` : data.error);
         } else {
           setAlchemyData(data);
         }
@@ -118,17 +123,42 @@ function ReputationContent() {
   const aaveVol = alchemyData?.protocols?.aave ?? 0;
   const lidoVol = alchemyData?.protocols?.lido ?? 0;
   const totalVol = uniswapVol + aaveVol + lidoVol;
-  const hasActivity = totalVol > 0 || walletAge > 1;
 
-  // Radar data derived from real protocol volumes (normalized to 0-100 scale)
-  const maxVol = Math.max(uniswapVol, aaveVol, lidoVol, 1);
+  // Interaction counts catch protocol usage that moves no native ETH — a USDC
+  // swap through the Uniswap router has zero ETH volume but is still activity.
+  const uniswapTx = alchemyData?.interactions?.uniswap ?? 0;
+  const aaveTx = alchemyData?.interactions?.aave ?? 0;
+  const lidoTx = alchemyData?.interactions?.lido ?? 0;
+  const protocolsUsed = [uniswapTx, aaveTx, lidoTx].filter(n => n > 0).length;
+  const hasActivity = protocolsUsed > 0 || totalVol > 0 || walletAge > 1;
+
+  /**
+   * Radar is driven by ETH volume when there is any, and falls back to raw
+   * interaction counts when a wallet trades purely in tokens — otherwise a busy
+   * stablecoin trader would render as an empty chart.
+   */
+  const useVolume = totalVol > 0;
+  const metric = (vol: number, txs: number) => (useVolume ? vol : txs);
+  const maxMetric = Math.max(
+    metric(uniswapVol, uniswapTx),
+    metric(aaveVol, aaveTx),
+    metric(lidoVol, lidoTx),
+    1
+  );
   const radarData = [
-    { subject: 'Uniswap', A: Math.min((uniswapVol / maxVol) * 100, 100), fullMark: 100 },
-    { subject: 'Aave', A: Math.min((aaveVol / maxVol) * 100, 100), fullMark: 100 },
-    { subject: 'Lido', A: Math.min((lidoVol / maxVol) * 100, 100), fullMark: 100 },
+    { subject: 'Uniswap', A: Math.min((metric(uniswapVol, uniswapTx) / maxMetric) * 100, 100), fullMark: 100 },
+    { subject: 'Aave', A: Math.min((metric(aaveVol, aaveTx) / maxMetric) * 100, 100), fullMark: 100 },
+    { subject: 'Lido', A: Math.min((metric(lidoVol, lidoTx) / maxMetric) * 100, 100), fullMark: 100 },
     { subject: 'Wallet Age', A: Math.min(walletAge / 10, 100), fullMark: 100 },
-    { subject: 'Diversity', A: [uniswapVol, aaveVol, lidoVol].filter(v => v > 0).length * 33, fullMark: 100 },
+    { subject: 'Diversity', A: protocolsUsed * 33, fullMark: 100 },
   ];
+
+  /** "1.20 ETH" when native value moved, else "3 interactions", else nothing. */
+  const formatVolume = (vol: number, txs: number) => {
+    if (vol > 0) return `${vol.toFixed(2)} ETH`;
+    if (txs > 0) return `${txs} interaction${txs === 1 ? '' : 's'}`;
+    return 'No activity';
+  };
 
   return (
     <main className="lg:ml-64 pt-24 pb-12 px-10 min-h-screen">
@@ -154,7 +184,7 @@ function ReputationContent() {
               <span className="text-on-surface-variant text-xs font-medium">Days Active</span>
             </div>
             <div className="flex items-center space-x-2 glass-pane px-4 py-2 rounded-full border border-white/5">
-              <span className="text-primary-container font-bold">{[uniswapVol, aaveVol, lidoVol].filter(v => v > 0).length}</span>
+              <span className="text-primary-container font-bold">{protocolsUsed}</span>
               <span className="text-on-surface-variant text-xs font-medium">Protocols Used</span>
             </div>
           </div>
@@ -227,7 +257,7 @@ function ReputationContent() {
                   </div>
                 </div>
                 <div className="text-right">
-                  <p className="text-primary font-headline font-bold">{uniswapVol > 0 ? `${uniswapVol.toFixed(2)} ETH` : "No activity"}</p>
+                  <p className="text-primary font-headline font-bold">{formatVolume(uniswapVol, uniswapTx)}</p>
                   <p className="text-[10px] uppercase text-on-surface-variant tracking-tighter">Volume</p>
                 </div>
               </motion.div>
@@ -243,7 +273,7 @@ function ReputationContent() {
                   </div>
                 </div>
                 <div className="text-right">
-                  <p className="text-primary font-headline font-bold">{aaveVol > 0 ? `${aaveVol.toFixed(2)} ETH` : "No activity"}</p>
+                  <p className="text-primary font-headline font-bold">{formatVolume(aaveVol, aaveTx)}</p>
                   <p className="text-[10px] uppercase text-on-surface-variant tracking-tighter">Volume</p>
                 </div>
               </motion.div>
@@ -259,7 +289,7 @@ function ReputationContent() {
                   </div>
                 </div>
                 <div className="text-right">
-                  <p className="text-primary font-headline font-bold">{lidoVol > 0 ? `${lidoVol.toFixed(2)} ETH` : "No activity"}</p>
+                  <p className="text-primary font-headline font-bold">{formatVolume(lidoVol, lidoTx)}</p>
                   <p className="text-[10px] uppercase text-on-surface-variant tracking-tighter">Staked</p>
                 </div>
               </motion.div>

@@ -14,6 +14,15 @@ export interface AuditReportData {
   walletAgeDays: number;
   activeChains: number;
   chainBreakdown: { chainId: string; name: string; txCount: number; volume: number }[];
+  // K-Alpha v3.0 scoring transparency (all optional — the report degrades
+  // gracefully to the older derived copy if a caller doesn't supply them)
+  narrative?: string | null;
+  tier?: string | null;
+  percentile?: number | null;
+  rawScore?: number | null;
+  components?: { key: string; label: string; value: number; max: number; detail: string }[] | null;
+  penalties?: { key: string; label: string; weight: number; detail: string }[] | null;
+  flags?: { label: string; passed: boolean }[] | null;
   // From /api/reputation
   protocols: { uniswap: number; aave: number; lido: number } | null;
   // From /api/governance
@@ -127,8 +136,11 @@ export async function generateAuditPDF(data: AuditReportData): Promise<void> {
   if (data.score >= 700) { riskTier = "Low Risk (Tier 1)"; riskColor = COLORS.success; }
   else if (data.score >= 400) { riskTier = "Medium Risk (Tier 2)"; riskColor = COLORS.warning; }
 
+  // Prefer the calibrated percentile the scoring engine produced. The old
+  // linear fallback only holds if scores are uniformly distributed, which they
+  // are not — it's kept purely so older callers still render.
   const scoreFraction = Math.min(data.score / 900, 1);
-  const percentile = Math.max((1 - scoreFraction) * 100, 0.1).toFixed(1);
+  const percentile = (data.percentile ?? Math.max((1 - scoreFraction) * 100, 0.1)).toFixed(1);
 
   // ════════════════════════════════════════════════════════
   // SECTION 1: HEADER & VERIFICATION METADATA
@@ -150,7 +162,7 @@ export async function generateAuditPDF(data: AuditReportData): Promise<void> {
   doc.text(`Report ID: ${reportId}`, 15, 24);
   doc.text(`Generated: ${new Date(timestamp).toUTCString()}`, 15, 29);
   doc.text(`Target: ${data.address}`, 15, 34);
-  doc.text(`Analysis Engine: K-Alpha v2.1 / Decoupled Engine`, 15, 39);
+  doc.text(`Analysis Engine: K-Alpha v3.0 / Decoupled Engine`, 15, 39);
 
   // Risk tier badge in header
   roundedRect(doc, 145, 22, 50, 8, 2, riskColor);
@@ -182,9 +194,13 @@ export async function generateAuditPDF(data: AuditReportData): Promise<void> {
   doc.setFontSize(8);
   doc.setTextColor("#334155");
 
-  const verdictText = data.score > 600
-    ? `This wallet demonstrates a sophisticated pattern of cross-chain interaction, prioritizing liquidity density and governance participation. With ${data.walletAgeDays} days of on-chain history across ${data.activeChains} chain(s) and ${data.txCount.toLocaleString()} total transactions, this identity exhibits long-term conviction and is classified as a high-value actor for specialized protocols.`
-    : `This wallet shows standard patterns of on-chain traversal with ${data.txCount.toLocaleString()} transactions over ${data.walletAgeDays} days. Activity parameters conform to median ecosystem trends. Moderate engagement level detected with potential for growth.`;
+  // The scoring engine writes a wallet-specific sentence; fall back to the
+  // generic copy only when a caller predates that field.
+  const verdictText = data.narrative
+    ? data.narrative
+    : data.score > 600
+      ? `This wallet demonstrates a sophisticated pattern of cross-chain interaction, prioritizing liquidity density and governance participation. With ${data.walletAgeDays} days of on-chain history across ${data.activeChains} chain(s) and ${data.txCount.toLocaleString()} total transactions, this identity exhibits long-term conviction and is classified as a high-value actor for specialized protocols.`
+      : `This wallet shows standard patterns of on-chain traversal with ${data.txCount.toLocaleString()} transactions over ${data.walletAgeDays} days. Activity parameters conform to median ecosystem trends. Moderate engagement level detected with potential for growth.`;
 
   const splitVerdict = doc.splitTextToSize(verdictText, pageWidth - 40);
   doc.text(splitVerdict, 20, y + 6);
@@ -195,7 +211,7 @@ export async function generateAuditPDF(data: AuditReportData): Promise<void> {
   const summaryItems = [
     { label: "Big Brain Score", value: `${data.score} / 900`, color: COLORS.primary },
     { label: "Percentile Rank", value: `Top ${percentile}%`, color: COLORS.secondary },
-    { label: "Risk Assessment", value: riskTier, color: riskColor },
+    { label: data.tier ? "Tier / Risk" : "Risk Assessment", value: data.tier ?? riskTier, color: riskColor },
   ];
 
   summaryItems.forEach((item, i) => {
@@ -214,9 +230,82 @@ export async function generateAuditPDF(data: AuditReportData): Promise<void> {
   y += 24;
 
   // ════════════════════════════════════════════════════════
+  // SECTION 2b: SCORE DECOMPOSITION
+  // Shows exactly where the 900 points came from, and what was docked.
+  // Only rendered when the caller supplies v3.0 scoring data.
+  // ════════════════════════════════════════════════════════
+
+  if (data.components && data.components.length > 0) {
+    // The decomposition block runs ~110mm tall with penalties, so give it a
+    // fresh page rather than letting it straddle a break mid-bar.
+    if (y > 140) { doc.addPage(); y = 20; }
+    y = sectionHeader(doc, y, "Score Decomposition", COLORS.secondary);
+
+    data.components.forEach((c) => {
+      const pct = c.max > 0 ? c.value / c.max : 0;
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8);
+      doc.setTextColor("#334155");
+      doc.text(c.label, 20, y);
+
+      // Progress track + fill
+      roundedRect(doc, 80, y - 2.6, 70, 3, 1.5, "#e2e8f0");
+      if (pct > 0) roundedRect(doc, 80, y - 2.6, Math.max(70 * pct, 1), 3, 1.5, COLORS.secondary);
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(8);
+      doc.setTextColor(COLORS.bg);
+      doc.text(`${c.value} / ${c.max}`, 155, y);
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(6);
+      doc.setTextColor("#94a3b8");
+      doc.text(c.detail, 20, y + 3.5);
+
+      y += 9;
+    });
+
+    if (data.penalties && data.penalties.length > 0) {
+      y += 2;
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(7);
+      doc.setTextColor(COLORS.danger);
+      doc.text("BEHAVIOURAL PENALTIES", 20, y);
+      y += 5;
+
+      data.penalties.forEach((p) => {
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(8);
+        doc.setTextColor("#334155");
+        doc.text(p.label, 20, y);
+        doc.setFont("helvetica", "bold");
+        doc.setTextColor(COLORS.danger);
+        doc.text(`-${Math.round(p.weight * 100)}%`, 155, y);
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(6);
+        doc.setTextColor("#94a3b8");
+        doc.text(p.detail, 20, y + 3.5);
+        y += 9;
+      });
+
+      if (data.rawScore) {
+        doc.setFont("helvetica", "italic");
+        doc.setFontSize(7);
+        doc.setTextColor("#64748b");
+        doc.text(`Raw subtotal ${data.rawScore} reduced to ${data.score} after penalties.`, 20, y);
+        y += 6;
+      }
+    }
+
+    y += 4;
+  }
+
+  // ════════════════════════════════════════════════════════
   // SECTION 3: CORE ON-CHAIN METRICS MATRIX
   // ════════════════════════════════════════════════════════
 
+  if (y > 200) { doc.addPage(); y = 20; }
   y = sectionHeader(doc, y, "Core On-Chain Metrics Matrix", COLORS.secondary);
 
   // Table header

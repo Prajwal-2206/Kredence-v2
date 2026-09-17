@@ -1,8 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { Suspense } from "react";
+import { Suspense, useState } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
+import { useAccount } from "wagmi";
+import SettingsPanel from "./SettingsPanel";
 
 export default function SideNavBar() {
   return (
@@ -33,10 +35,17 @@ function SideNavBarShell() {
 function SideNavBarContent() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const { address: connectedAddress } = useAccount();
   const address = searchParams?.get("address");
   const qs = address ? `?address=${address}` : "";
 
+  // The panel acts on whichever wallet the page is actually showing — the
+  // searched address wins over the connected one, same rule the pages use.
+  const currentAddress = address || connectedAddress || null;
+  const [settingsOpen, setSettingsOpen] = useState(false);
+
   return (
+    <>
     <aside className="hidden lg:flex flex-col py-8 gap-4 h-[calc(100vh-72px)] fixed left-0 top-0 bg-slate-950/60 backdrop-blur-2xl border-r border-white/5 shadow-2xl shadow-black/40 z-40 mt-[72px] w-64">
       <div className="px-6 mb-8">
         <div className="flex items-center gap-3">
@@ -72,20 +81,30 @@ function SideNavBarContent() {
           <span className="material-symbols-outlined" style={{fontVariationSettings: pathname.includes('/governance') ? "'FILL' 1" : "'FILL' 0"}}>account_balance</span>
           <span className="font-headline text-sm uppercase tracking-widest">Governance</span>
         </Link>
-        <Link
-          href={`#settings`}
-          className="flex items-center gap-4 px-6 py-3 transition-all duration-200 text-tertiary/40 hover:bg-white/10 hover:text-primary group"
+        <button
+          onClick={() => setSettingsOpen(true)}
+          className={`w-full flex items-center gap-4 px-6 py-3 transition-all duration-200 cursor-pointer ${settingsOpen ? 'text-primary bg-white/5 border-r-2 border-primary' : 'text-tertiary/40 hover:bg-white/10 hover:text-primary'} group`}
         >
           <span className="material-symbols-outlined">settings</span>
           <span className="font-headline text-sm uppercase tracking-widest">Settings</span>
-        </Link>
+        </button>
       </div>
 
       <div className="px-6 mt-auto">
-        <button className="w-full py-3 bg-white/5 border border-white/10 rounded-xl text-primary font-medium hover:bg-white/10 transition-all text-sm font-headline tracking-widest uppercase cursor-pointer">
+        <button
+          onClick={() => setSettingsOpen(true)}
+          className="w-full py-3 bg-white/5 border border-white/10 rounded-xl text-primary font-medium hover:bg-white/10 transition-all text-sm font-headline tracking-widest uppercase cursor-pointer"
+        >
           Share Profile
         </button>
       </div>
     </aside>
+
+    <SettingsPanel
+      open={settingsOpen}
+      onClose={() => setSettingsOpen(false)}
+      currentAddress={currentAddress}
+    />
+    </>
   );
 }

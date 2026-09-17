@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getLiveGovernancePower } from '@/lib/governanceReads';
 import { getUserVotes, getProposalsAuthoredCount } from '@/lib/snapshotClient';
+import { redactSecrets } from '@/lib/redact';
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -26,7 +27,7 @@ export async function GET(request: Request) {
     console.error("GOVERNANCE API ERROR:", msg);
     return NextResponse.json({ 
       error: 'Governance resolution failed', 
-      details: msg 
+      details: redactSecrets(msg) 
     }, { status: 500 });
   }
 }

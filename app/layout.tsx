@@ -1,4 +1,7 @@
 'use client';
+// Must come first: neutralizes Node's non-functional `localStorage` global
+// before RainbowKit's module loads and feature-detects it during SSR.
+import '@/lib/nodeStorageShim';
 import './globals.css';
 import '@rainbow-me/rainbowkit/styles.css';
 import { getDefaultConfig, RainbowKitProvider, darkTheme } from '@rainbow-me/rainbowkit';
