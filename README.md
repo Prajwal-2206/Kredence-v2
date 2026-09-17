@@ -20,7 +20,7 @@ The current financial system relies on opaque, centralized credit bureaus that d
 
 **Kredence v2 fixes this.** We built a high-fidelity, cross-chain intelligence engine that calculates your **"Skin in the Game."** It ingests fragmented wallet history across Ethereum, Base, Arbitrum, and Solana, analyzing your transaction density, asset conviction, and governance participation to output a unified **Degen Score (0-1000)**. 
 
-We didn't just build a calculator; we built a vibe-coded, glassmorphic surveillance dashboard for your Web3 identity.
+We didn't just build a calculator; we built a glassmorphic surveillance dashboard for your Web3 identity.
 
 ---
 
