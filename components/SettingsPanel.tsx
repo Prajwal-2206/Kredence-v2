@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import {
@@ -21,7 +22,19 @@ interface SettingsPanelProps {
   onClose: () => void;
   /** Address currently being viewed, if any. */
   currentAddress: string | null;
+  /**
+   * Show the view links. The mobile menu sets this because below `lg` the
+   * sidebar is not rendered and under `md` the top nav links are hidden too,
+   * leaving no other way to move between Dashboard, Reputation and Governance.
+   */
+  showNav?: boolean;
 }
+
+const VIEWS = [
+  { href: "/dashboard", label: "Dashboard", icon: "grid_view" },
+  { href: "/dashboard/reputation", label: "Reputation", icon: "description" },
+  { href: "/dashboard/governance", label: "Governance", icon: "account_balance" },
+];
 
 /**
  * Subscribes to the localStorage-backed watchlist.
@@ -53,10 +66,17 @@ function useWatchlistStore() {
   );
 }
 
-export default function SettingsPanel({ open, onClose, currentAddress }: SettingsPanelProps) {
+export default function SettingsPanel({
+  open,
+  onClose,
+  currentAddress,
+  showNav = false,
+}: SettingsPanelProps) {
   return (
     <AnimatePresence>
-      {open && <SettingsDrawer onClose={onClose} currentAddress={currentAddress} />}
+      {open && (
+        <SettingsDrawer onClose={onClose} currentAddress={currentAddress} showNav={showNav} />
+      )}
     </AnimatePresence>
   );
 }
@@ -68,9 +88,11 @@ export default function SettingsPanel({ open, onClose, currentAddress }: Setting
 function SettingsDrawer({
   onClose,
   currentAddress,
+  showNav,
 }: {
   onClose: () => void;
   currentAddress: string | null;
+  showNav: boolean;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -151,17 +173,19 @@ function SettingsDrawer({
         transition={{ type: "spring", stiffness: 320, damping: 34 }}
         role="dialog"
         aria-modal="true"
-        aria-label="Settings"
+        aria-label={showNav ? "Menu" : "Settings"}
         className="fixed right-0 top-0 h-full w-full sm:w-[420px] bg-slate-950/95 backdrop-blur-2xl border-l border-white/10 shadow-2xl shadow-black/60 z-[61] flex flex-col"
       >
         <header className="flex items-center justify-between px-6 py-5 border-b border-white/5 shrink-0">
           <div className="flex items-center gap-3">
-            <span className="material-symbols-outlined text-primary">settings</span>
-            <h2 className="font-headline text-sm uppercase tracking-widest text-primary">Settings</h2>
+            <span className="material-symbols-outlined text-primary">{showNav ? "menu" : "settings"}</span>
+            <h2 className="font-headline text-sm uppercase tracking-widest text-primary">
+              {showNav ? "Menu" : "Settings"}
+            </h2>
           </div>
           <button
             onClick={onClose}
-            aria-label="Close settings"
+            aria-label={showNav ? "Close menu" : "Close settings"}
             className="text-tertiary/40 hover:text-primary transition-colors cursor-pointer"
           >
             <span className="material-symbols-outlined">close</span>
@@ -169,6 +193,35 @@ function SettingsDrawer({
         </header>
 
         <div className="flex-1 overflow-y-auto px-6 py-6 space-y-8">
+          {/* ── Views (mobile only) ─────────────────────────────── */}
+          {showNav && (
+            <section>
+              <h3 className="font-headline text-xs uppercase tracking-widest text-white mb-4">Go To</h3>
+              <ul className="space-y-2">
+                {VIEWS.map((v) => {
+                  const isActive =
+                    v.href === "/dashboard" ? pathname === v.href : pathname.startsWith(v.href);
+                  return (
+                    <li key={v.href}>
+                      <Link
+                        href={currentAddress ? `${v.href}?address=${currentAddress}` : v.href}
+                        onClick={onClose}
+                        className={`flex items-center gap-3 px-4 py-3 rounded-2xl border transition-all ${
+                          isActive
+                            ? "border-primary/40 bg-primary/10 text-primary"
+                            : "border-white/5 bg-white/5 text-tertiary/60 hover:bg-white/10 hover:text-primary"
+                        }`}
+                      >
+                        <span className="material-symbols-outlined text-lg">{v.icon}</span>
+                        <span className="font-headline text-sm uppercase tracking-widest">{v.label}</span>
+                      </Link>
+                    </li>
+                  );
+                })}
+              </ul>
+            </section>
+          )}
+
           {/* ── Saved wallets ───────────────────────────────────── */}
           <section>
             <div className="flex items-baseline justify-between mb-4">
