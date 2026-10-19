@@ -41,6 +41,15 @@ export interface ChainActivity {
   name: string;
   txCount: number;
   volume: number;
+  /**
+   * False when the provider could not be queried for this chain at all.
+   *
+   * Without this flag a failed request and a genuinely unused chain are the
+   * same value — zero — and the scorer silently treats "we never asked" as
+   * "the wallet was never here". Every consumer must branch on this before
+   * reading `txCount`.
+   */
+  available: boolean;
 }
 
 /** One time bucket of the wallet's lifetime, used to draw the activity charts. */
@@ -70,6 +79,10 @@ export interface WalletMetrics {
   daysSinceLastTx: number;
   activeChains: number;
   chainBreakdown: ChainActivity[];
+  /** Chain ids the provider refused or failed to serve. Empty means full coverage. */
+  unavailableChains: string[];
+  /** Chains actually queried successfully — the honest denominator for diversity. */
+  observedChains: number;
   /** Normalized Shannon entropy of the tx distribution across chains, 0–1. */
   chainEntropy: number;
   /** Distinct calendar months that contain at least one transaction. */
@@ -188,6 +201,14 @@ const SERIES_BUCKETS = 12;
 export interface Coverage {
   truncated: boolean;
   windowStart: number | null;
+  /**
+   * Chain ids whose history could not be fetched at all — a provider outage,
+   * a 403 from a network the API key has no plan for, a timeout.
+   *
+   * These are scored as unknown, never as zero. A chain the caller omits here
+   * is asserted to have been queried successfully.
+   */
+  unavailableChains?: string[];
 }
 
 /**
@@ -260,26 +281,33 @@ export function computeWalletMetrics(
 
   const txCount = unique.length;
 
+  const unavailable = new Set(coverage.unavailableChains ?? []);
+
   const chainBreakdown: ChainActivity[] = Object.keys(chainNames).map((chainId) => ({
     chainId,
     name: chainNames[chainId],
     txCount: chainTx.get(chainId) ?? 0,
     volume: chainVol.get(chainId) ?? 0,
+    available: !unavailable.has(chainId),
   }));
 
-  const activeChains = chainBreakdown.filter((c) => c.txCount > 0).length;
+  // Every chain-shaped denominator below counts only chains we actually reached.
+  // Dividing by the full supported list instead would permanently cap diversity
+  // for everyone whenever a single network is unreachable.
+  const observedChains = chainBreakdown.filter((c) => c.available).length;
+  const activeChains = chainBreakdown.filter((c) => c.available && c.txCount > 0).length;
 
   // Normalized Shannon entropy: 1 means activity is spread evenly across every
-  // supported chain, 0 means it all sits on one.
+  // chain we could see, 0 means it all sits on one.
   let entropy = 0;
   if (txCount > 0) {
     for (const c of chainBreakdown) {
-      if (c.txCount === 0) continue;
+      if (!c.available || c.txCount === 0) continue;
       const p = c.txCount / txCount;
       entropy -= p * Math.log(p);
     }
   }
-  const maxEntropy = Math.log(Math.max(Object.keys(chainNames).length, 2));
+  const maxEntropy = Math.log(Math.max(observedChains, 2));
   const chainEntropy = maxEntropy > 0 ? clamp(entropy / maxEntropy, 0, 1) : 0;
 
   const walletAgeDays = firstMs === null ? 0 : Math.max(Math.floor((now - firstMs) / DAY_MS), 0);
@@ -365,6 +393,8 @@ export function computeWalletMetrics(
     daysSinceLastTx,
     activeChains,
     chainBreakdown,
+    unavailableChains: [...unavailable],
+    observedChains,
     chainEntropy,
     activeMonths,
     lifetimeMonths,
@@ -439,8 +469,11 @@ export function calculateScore(m: WalletMetrics): ScoreResult {
   // address as immature just because we could only see its recent history.
   const maturity = clamp(m.walletAgeDays / 180, 0, 1);
   const consistency = Math.pow(m.consistency, 0.8) * maturity * WEIGHTS.consistency;
+  // Denominator is the chains we actually reached, not every chain we support.
+  // Keying it to the full list meant one unreachable network silently capped
+  // this dimension for every wallet scored.
   const diversity =
-    (m.activeChains / Math.max(m.chainBreakdown.length, 1)) * (WEIGHTS.diversity * 0.6) +
+    (m.activeChains / Math.max(m.observedChains, 1)) * (WEIGHTS.diversity * 0.6) +
     m.chainEntropy * (WEIGHTS.diversity * 0.4);
   const counterparty = logScale(m.uniqueCounterparties, ANCHORS.counterparties, WEIGHTS.counterparty);
 
@@ -484,7 +517,11 @@ export function calculateScore(m: WalletMetrics): ScoreResult {
       label: "Chain Diversity",
       value: diversity,
       max: WEIGHTS.diversity,
-      detail: `${m.activeChains} of ${m.chainBreakdown.length} chains, ${Math.round(m.chainEntropy * 100)}% spread`,
+      detail:
+        m.unavailableChains.length > 0
+          ? `${m.activeChains} of ${m.observedChains} reachable chains, ${Math.round(m.chainEntropy * 100)}% spread ` +
+            `(${m.unavailableChains.length} chain${m.unavailableChains.length === 1 ? "" : "s"} unreachable, scored as unknown)`
+          : `${m.activeChains} of ${m.observedChains} chains, ${Math.round(m.chainEntropy * 100)}% spread`,
     },
     {
       key: "counterparty",
@@ -566,7 +603,11 @@ function derivePenalties(m: WalletMetrics): ScorePenalty[] {
   }
 
   // Single-chain — real conviction shows up in more than one place.
-  if (m.activeChains <= 1) {
+  //
+  // Suppressed when any chain was unreachable: a wallet that looks single-chain
+  // because two networks returned 403 is not the same as one that genuinely
+  // never left home, and docking it for our own blind spot is indefensible.
+  if (m.activeChains <= 1 && m.unavailableChains.length === 0) {
     out.push({
       key: "monochain",
       label: "Single-Chain Exposure",
@@ -690,6 +731,14 @@ export function buildNarrative(m: WalletMetrics, result: ScoreResult): string {
       ? ` Docked for ${listPhrase(result.penalties.map((p) => p.label.toLowerCase()))}.`
       : ` No adverse behavioural patterns detected.`;
 
+  // Never let the sentence read as a complete picture when it isn't.
+  const coverageClause =
+    m.unavailableChains.length > 0
+      ? ` Coverage is partial — ${listPhrase(
+          m.chainBreakdown.filter((c) => !c.available).map((c) => c.name)
+        )} could not be queried, so this wallet may be more active than shown.`
+      : "";
+
   const countClause = m.sampled
     ? `${m.txCount.toLocaleString()}+ transfers`
     : `${m.txCount.toLocaleString()} transfers`;
@@ -697,7 +746,8 @@ export function buildNarrative(m: WalletMetrics, result: ScoreResult): string {
   return (
     `${ageClause} with ${countClause} ${chainClause}, ` +
     `${rhythmClause} — ${shapeClause}.` +
-    penaltyClause
+    penaltyClause +
+    coverageClause
   );
 }
 
@@ -721,7 +771,12 @@ export function buildFlags(m: WalletMetrics, result: ScoreResult): { label: stri
       passed: !penaltyKeys.has("burst") && m.activeMonths >= 3,
     },
     {
-      label: "Multi-chain presence",
+      // When a chain was unreachable this verdict only covers the ones we saw,
+      // so the label says so rather than overclaiming a negative we can't prove.
+      label:
+        m.unavailableChains.length > 0
+          ? "Multi-chain presence (reachable chains only)"
+          : "Multi-chain presence",
       passed: m.activeChains >= 2,
     },
     {

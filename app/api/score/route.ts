@@ -91,7 +91,17 @@ export async function GET(request: Request) {
         withMetadata: true,  // This gives us blockTimestamp for wallet age
       };
 
-      const fetchPage = (direction: 'from' | 'to', order: 'asc' | 'desc') =>
+      /**
+       * One page of transfers, carrying whether the request actually succeeded.
+       *
+       * The previous version collapsed every failure to `[]`, which made a 403
+       * from an unprovisioned network indistinguishable from a wallet that had
+       * genuinely never touched that chain. Scores were silently computed as if
+       * the unreachable chains were empty.
+       */
+      type Page = { rows: AlchemyTransfer[]; ok: boolean };
+
+      const fetchPage = (direction: 'from' | 'to', order: 'asc' | 'desc'): Promise<Page> =>
         axios.post(alchemyUrl, {
           jsonrpc: "2.0",
           id: 1,
@@ -102,8 +112,26 @@ export async function GET(request: Request) {
             ...(direction === 'from' ? { fromAddress: address } : { toAddress: address }),
           }],
         }, { headers })
-          .then((r) => (r.data?.result?.transfers ?? []) as AlchemyTransfer[])
-          .catch(() => [] as AlchemyTransfer[]);
+          .then((r) => {
+            // JSON-RPC reports errors inside a 200 body, so status alone is not
+            // enough — an unprovisioned network answers 200-with-error on some
+            // paths and 403 on others.
+            if (r.data?.error) {
+              console.error(
+                `[score] ${chain.name} (${chain.chainId}) rpc error:`,
+                redactSecrets(String(r.data.error?.message ?? 'unknown'))
+              );
+              return { rows: [], ok: false };
+            }
+            return { rows: (r.data?.result?.transfers ?? []) as AlchemyTransfer[], ok: true };
+          })
+          .catch((e: unknown) => {
+            const detail = axios.isAxiosError(e)
+              ? `HTTP ${e.response?.status ?? '?'} ${JSON.stringify(e.response?.data ?? e.message)}`
+              : e instanceof Error ? e.message : String(e);
+            console.error(`[score] ${chain.name} (${chain.chainId}) request failed:`, redactSecrets(detail));
+            return { rows: [], ok: false };
+          });
 
       const [outAsc, inAsc, outDesc, inDesc] = await Promise.all([
         fetchPage('from', 'asc'),
@@ -112,9 +140,21 @@ export async function GET(request: Request) {
         fetchPage('to', 'desc'),
       ]);
 
+      const pages = [outAsc, inAsc, outDesc, inDesc];
+
+      /**
+       * Three distinct states, which the old `[]` collapsed into one:
+       *   every page ok      → the chain was observed, zero means zero
+       *   every page failed  → the chain is unknown, not empty
+       *   some pages failed  → partial, so treat it as sampled coverage
+       */
+      const available = pages.some((p) => p.ok);
+      const partial = pages.some((p) => !p.ok);
+
       // A page that came back completely full means there is more history we
-      // never saw — the wallet's record is sampled, not complete.
-      const truncated = [outAsc, inAsc, outDesc, inDesc].some((p) => p.length >= PAGE_SIZE);
+      // never saw — the wallet's record is sampled, not complete. A page that
+      // failed outright means the same thing for a different reason.
+      const truncated = partial || pages.some((p) => p.rows.length >= PAGE_SIZE);
 
       /**
        * Where our *complete* recent coverage begins on this chain.
@@ -126,8 +166,8 @@ export async function GET(request: Request) {
       let recentWindowStart: number | null = null;
       if (truncated) {
         for (const page of [outDesc, inDesc]) {
-          if (page.length < PAGE_SIZE) continue; // this direction is complete
-          const earliest = earliestTimestampOf(page);
+          if (!page.ok || page.rows.length < PAGE_SIZE) continue; // complete, or nothing to trust
+          const earliest = earliestTimestampOf(page.rows);
           if (earliest !== null && (recentWindowStart === null || earliest > recentWindowStart)) {
             // Take the LATEST of the per-direction starts: only from that point
             // on is every direction fully covered.
@@ -136,7 +176,7 @@ export async function GET(request: Request) {
         }
       }
 
-      const raw: AlchemyTransfer[] = [...outAsc, ...inAsc, ...outDesc, ...inDesc];
+      const raw: AlchemyTransfer[] = pages.flatMap((p) => p.rows);
 
       /**
        * Normalize into the provider-agnostic shape the scorer expects.
@@ -159,13 +199,17 @@ export async function GET(request: Request) {
         isNative: t.category === 'external',
       }));
 
-      return { transfers, truncated, recentWindowStart };
+      return { chainId: chain.chainId, name: chain.name, transfers, truncated, recentWindowStart, available };
     });
 
     // Wait for ALL chains to finish (parallel execution)
     const perChain = await Promise.all(chainPromises);
     const transfers = perChain.flatMap((c) => c.transfers);
     const truncated = perChain.some((c) => c.truncated);
+
+    // Chains we could not reach at all. These are reported as unknown and are
+    // excluded from every chain-shaped denominator in the scorer.
+    const unavailableChains = perChain.filter((c) => !c.available).map((c) => c.chainId);
 
     // The analysis window has to be complete on EVERY chain, so take the latest
     // per-chain start. Untruncated chains impose no constraint.
@@ -184,6 +228,7 @@ export async function GET(request: Request) {
     const metrics = computeWalletMetrics(transfers, address, CHAIN_NAMES, Date.now(), {
       truncated,
       windowStart,
+      unavailableChains,
     });
     const result = calculateScore(metrics);
 
@@ -195,6 +240,17 @@ export async function GET(request: Request) {
       walletAgeDays: metrics.walletAgeDays,
       activeChains: metrics.activeChains,
       chainBreakdown: metrics.chainBreakdown,
+
+      // Coverage, surfaced so the UI can distinguish "no activity" from
+      // "we could not look". Never omit this from a response.
+      coverage: {
+        complete: unavailableChains.length === 0 && !truncated,
+        observedChains: metrics.observedChains,
+        unavailableChains: perChain
+          .filter((c) => !c.available)
+          .map((c) => ({ chainId: c.chainId, name: c.name })),
+        sampled: truncated,
+      },
 
       // Scoring transparency
       rawScore: result.rawScore,

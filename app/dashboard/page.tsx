@@ -227,8 +227,10 @@ function DashboardContent() {
   const networksCount = scoreData?.activeChains || 0;
   const chainBreakdown: ChainActivity[] = scoreData?.chainBreakdown || [];
 
-  // Find the earliest chain for the "first seen" date display
-  const activeChains = chainBreakdown.filter((c) => c.txCount > 0);
+  // Find the earliest chain for the "first seen" date display.
+  // Guarded on `available` so an unreachable chain can never be counted as
+  // active on the strength of a zero we never actually measured.
+  const activeChains = chainBreakdown.filter((c) => c.available && c.txCount > 0);
 
   /**
    * Scoring transparency payload from K-Alpha v3.0. Everything below is
@@ -683,11 +685,43 @@ function DashboardContent() {
                       }) : (
                         <div className="text-xs text-on-surface-variant text-center py-2">No cross-chain activity detected</div>
                       )}
-                      {chainBreakdown.filter((c) => c.txCount === 0).length > 0 && (
+                      {/*
+                        A chain we reached and found empty, and a chain we could
+                        not reach, are different claims. Only the first one
+                        justifies "not active on" — the second is unknown, and
+                        saying otherwise asserts a fact we never checked.
+                      */}
+                      {chainBreakdown.filter((c) => !c.available).length > 0 && (
+                        <div className="pt-2 border-t border-white/5">
+                          <div className="text-[10px] text-amber-400/70 uppercase tracking-widest mb-1.5">
+                            Could not be queried
+                          </div>
+                          <div className="flex gap-2 flex-wrap">
+                            {chainBreakdown.filter((c) => !c.available).map((chain) => {
+                              const meta = CHAIN_META[chain.chainId];
+                              if (!meta) return null;
+                              return (
+                                <div
+                                  key={chain.chainId}
+                                  title="This network could not be reached, so activity here is unknown — not zero."
+                                  className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-amber-400/10 border border-amber-400/20"
+                                >
+                                  <img src={meta.logo} alt={meta.name} className="w-3 h-3 rounded-full opacity-60" />
+                                  <span className="text-[10px] text-amber-400/80">{meta.name}</span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                          <div className="text-[10px] text-on-surface-variant/50 mt-1.5">
+                            Activity on these networks is unknown and excluded from scoring.
+                          </div>
+                        </div>
+                      )}
+                      {chainBreakdown.filter((c) => c.available && c.txCount === 0).length > 0 && (
                         <div className="pt-2 border-t border-white/5">
                           <div className="text-[10px] text-on-surface-variant/50 uppercase tracking-widest mb-1.5">Not active on</div>
                           <div className="flex gap-2">
-                            {chainBreakdown.filter((c) => c.txCount === 0).map((chain) => {
+                            {chainBreakdown.filter((c) => c.available && c.txCount === 0).map((chain) => {
                               const meta = CHAIN_META[chain.chainId];
                               if (!meta) return null;
                               return (

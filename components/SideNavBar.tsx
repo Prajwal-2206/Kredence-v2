@@ -75,6 +75,13 @@ function SideNavBarContent() {
           <span className="font-headline text-sm uppercase tracking-widest">Reputation</span>
         </Link>
         <Link
+          href={`/dashboard/credit${qs}`}
+          className={`flex items-center gap-4 px-6 py-3 transition-all duration-200 ${pathname.includes('/credit') ? 'text-primary bg-white/5 border-r-2 border-primary' : 'text-tertiary/40 hover:bg-white/10 hover:text-primary'} group`}
+        >
+          <span className="material-symbols-outlined" style={{fontVariationSettings: pathname.includes('/credit') ? "'FILL' 1" : "'FILL' 0"}}>credit_score</span>
+          <span className="font-headline text-sm uppercase tracking-widest">Credit</span>
+        </Link>
+        <Link
           href={`/dashboard/governance${qs}`}
           className={`flex items-center gap-4 px-6 py-3 transition-all duration-200 ${pathname.includes('/governance') ? 'text-primary bg-white/5 border-r-2 border-primary' : 'text-tertiary/40 hover:bg-white/10 hover:text-primary'} group`}
         >
