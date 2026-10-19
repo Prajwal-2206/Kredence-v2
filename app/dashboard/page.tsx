@@ -6,6 +6,7 @@ import { useSearchParams } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { generateAuditPDF } from "@/lib/auditReport";
 import { cacheScore } from "@/lib/watchlist";
+import CreditBand from "@/components/CreditBand";
 import type { AuditReportData } from "@/lib/auditReport";
 import type {
   ActivityBucket,
@@ -356,6 +357,17 @@ function DashboardContent() {
             </div>
           </section>
 
+          {/* ── K-CREDIT BAND ──
+              Surfaces live lending risk next to the behavioural score.
+              Kept visually distinct and separately sourced: K-Alpha is
+              cumulative history and cannot worsen, while this is instantaneous
+              position state that moves with the price of collateral. Blending
+              them into one figure would let a long clean history mask a
+              position that is about to be liquidated. */}
+          <section className="max-w-6xl mx-auto mb-12">
+            <CreditBand address={address} behavioural={score} />
+          </section>
+
           <section className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
 
             {/* ── WALLET AGE CARD ── */}
@@ -449,7 +461,7 @@ function DashboardContent() {
                     <div className="w-full h-[4%] bg-secondary/20 rounded-t-sm"></div>
                   )}
                 </div>
-                <div className="text-xl font-headline font-bold text-on-surface">{txCount.toLocaleString()} Txs</div>
+                <div className="text-xl font-headline font-bold text-on-surface">{txCount.toLocaleString("en-US")} Txs</div>
               </div>
               <AnimatePresence>
                 {expandedCard === "volume" && (
@@ -479,7 +491,7 @@ function DashboardContent() {
                               <div className="w-20 h-1.5 bg-white/5 rounded-full overflow-hidden">
                                 <div className="h-full bg-secondary rounded-full" style={{ width: `${pct}%` }}></div>
                               </div>
-                              <span className="text-xs font-mono text-on-surface-variant w-16 text-right">{chain.txCount.toLocaleString()}</span>
+                              <span className="text-xs font-mono text-on-surface-variant w-16 text-right">{chain.txCount.toLocaleString("en-US")}</span>
                             </div>
                           </div>
                         );
@@ -502,7 +514,7 @@ function DashboardContent() {
                           <div className="flex justify-between">
                             <span className="text-on-surface-variant">Token / NFT transfers</span>
                             <span className="text-on-surface font-mono">
-                              {metrics.tokenTransferCount.toLocaleString()} / {metrics.nftTransferCount.toLocaleString()}
+                              {metrics.tokenTransferCount.toLocaleString("en-US")} / {metrics.nftTransferCount.toLocaleString("en-US")}
                             </span>
                           </div>
                         </div>
@@ -582,11 +594,11 @@ function DashboardContent() {
                         <span>Average transactions per day of wallet lifetime</span>
                       </div>
                       <div className="text-sm text-on-surface font-mono">
-                        <span className="text-error font-bold">{txCount.toLocaleString()}</span>
+                        <span className="text-error font-bold">{txCount.toLocaleString("en-US")}</span>
                         <span className="text-on-surface-variant"> txs </span>
                         <span className="text-on-surface-variant">/</span>
                         <span className="text-on-surface-variant"> </span>
-                        <span className="text-error font-bold">{walletAge.toLocaleString()}</span>
+                        <span className="text-error font-bold">{walletAge.toLocaleString("en-US")}</span>
                         <span className="text-on-surface-variant"> days</span>
                         <span className="text-on-surface-variant"> = </span>
                         <span className="text-primary font-bold">{txDensity}</span>
@@ -604,7 +616,7 @@ function DashboardContent() {
                           <div className="flex justify-between">
                             <span className="text-on-surface-variant">Last seen</span>
                             <span className="text-on-surface font-mono">
-                              {metrics.daysSinceLastTx === 0 ? "today" : `${metrics.daysSinceLastTx.toLocaleString()}d ago`}
+                              {metrics.daysSinceLastTx === 0 ? "today" : `${metrics.daysSinceLastTx.toLocaleString("en-US")}d ago`}
                             </span>
                           </div>
                           <div className="flex justify-between">
@@ -679,7 +691,7 @@ function DashboardContent() {
                               <img src={meta.logo} alt={meta.name} className="w-5 h-5 rounded-full" />
                               <span className="text-sm font-medium text-on-surface">{meta.name}</span>
                             </div>
-                            <span className="text-xs font-mono text-primary-container">{chain.txCount.toLocaleString()} txs</span>
+                            <span className="text-xs font-mono text-primary-container">{chain.txCount.toLocaleString("en-US")} txs</span>
                           </div>
                         );
                       }) : (
@@ -823,11 +835,11 @@ function DashboardContent() {
                   <div className="flex flex-wrap items-center gap-4 text-xs font-label text-on-surface-variant uppercase tracking-widest">
                     <span>Analysis Engine: K-Alpha v3.0</span>
                     <span className="w-1 h-1 rounded-full bg-outline"></span>
-                    <span>Data Points: {txCount.toLocaleString()}{metrics?.sampled ? "+" : ""} transfers</span>
+                    <span>Data Points: {txCount.toLocaleString("en-US")}{metrics?.sampled ? "+" : ""} transfers</span>
                     {metrics && (
                       <>
                         <span className="w-1 h-1 rounded-full bg-outline"></span>
-                        <span>{metrics.uniqueCounterparties.toLocaleString()} counterparties</span>
+                        <span>{metrics.uniqueCounterparties.toLocaleString("en-US")} counterparties</span>
                       </>
                     )}
                   </div>

@@ -484,22 +484,22 @@ export function calculateScore(m: WalletMetrics): ScoreResult {
       value: activity,
       max: WEIGHTS.activity,
       detail: m.sampled
-        ? `${m.txCount.toLocaleString()}+ transfers (provider row cap reached)`
-        : `${m.txCount.toLocaleString()} transfers indexed`,
+        ? `${m.txCount.toLocaleString("en-US")}+ transfers (provider row cap reached)`
+        : `${m.txCount.toLocaleString("en-US")} transfers indexed`,
     },
     {
       key: "capital",
       label: "Capital Flow",
       value: capital,
       max: WEIGHTS.capital,
-      detail: `${round1(m.nativeVolume).toLocaleString()} in native-asset volume`,
+      detail: `${round1(m.nativeVolume).toLocaleString("en-US")} in native-asset volume`,
     },
     {
       key: "longevity",
       label: "Longevity",
       value: longevity,
       max: WEIGHTS.longevity,
-      detail: `${m.walletAgeDays.toLocaleString()} days since first transaction`,
+      detail: `${m.walletAgeDays.toLocaleString("en-US")} days since first transaction`,
     },
     {
       key: "consistency",
@@ -528,7 +528,7 @@ export function calculateScore(m: WalletMetrics): ScoreResult {
       label: "Counterparty Breadth",
       value: counterparty,
       max: WEIGHTS.counterparty,
-      detail: `${m.uniqueCounterparties.toLocaleString()} distinct addresses`,
+      detail: `${m.uniqueCounterparties.toLocaleString("en-US")} distinct addresses`,
     },
   ];
 
@@ -577,7 +577,7 @@ function derivePenalties(m: WalletMetrics): ScorePenalty[] {
       key: "dormancy",
       label: "Dormancy Decay",
       weight: round2(0.12 * clamp((m.daysSinceLastTx - 180) / 545, 0, 1)),
-      detail: `no activity for ${m.daysSinceLastTx.toLocaleString()} days`,
+      detail: `no activity for ${m.daysSinceLastTx.toLocaleString("en-US")} days`,
     });
   }
 
@@ -598,7 +598,7 @@ function derivePenalties(m: WalletMetrics): ScorePenalty[] {
       key: "loop",
       label: "Closed-Loop Activity",
       weight: 0.09,
-      detail: `${m.txCount.toLocaleString()} transfers across only ${m.uniqueCounterparties} counterparties`,
+      detail: `${m.txCount.toLocaleString("en-US")} transfers across only ${m.uniqueCounterparties} counterparties`,
     });
   }
 
@@ -740,8 +740,8 @@ export function buildNarrative(m: WalletMetrics, result: ScoreResult): string {
       : "";
 
   const countClause = m.sampled
-    ? `${m.txCount.toLocaleString()}+ transfers`
-    : `${m.txCount.toLocaleString()} transfers`;
+    ? `${m.txCount.toLocaleString("en-US")}+ transfers`
+    : `${m.txCount.toLocaleString("en-US")} transfers`;
 
   return (
     `${ageClause} with ${countClause} ${chainClause}, ` +

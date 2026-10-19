@@ -199,8 +199,8 @@ export async function generateAuditPDF(data: AuditReportData): Promise<void> {
   const verdictText = data.narrative
     ? data.narrative
     : data.score > 600
-      ? `This wallet demonstrates a sophisticated pattern of cross-chain interaction, prioritizing liquidity density and governance participation. With ${data.walletAgeDays} days of on-chain history across ${data.activeChains} chain(s) and ${data.txCount.toLocaleString()} total transactions, this identity exhibits long-term conviction and is classified as a high-value actor for specialized protocols.`
-      : `This wallet shows standard patterns of on-chain traversal with ${data.txCount.toLocaleString()} transactions over ${data.walletAgeDays} days. Activity parameters conform to median ecosystem trends. Moderate engagement level detected with potential for growth.`;
+      ? `This wallet demonstrates a sophisticated pattern of cross-chain interaction, prioritizing liquidity density and governance participation. With ${data.walletAgeDays} days of on-chain history across ${data.activeChains} chain(s) and ${data.txCount.toLocaleString("en-US")} total transactions, this identity exhibits long-term conviction and is classified as a high-value actor for specialized protocols.`
+      : `This wallet shows standard patterns of on-chain traversal with ${data.txCount.toLocaleString("en-US")} transactions over ${data.walletAgeDays} days. Activity parameters conform to median ecosystem trends. Moderate engagement level detected with potential for growth.`;
 
   const splitVerdict = doc.splitTextToSize(verdictText, pageWidth - 40);
   doc.text(splitVerdict, 20, y + 6);
@@ -323,13 +323,13 @@ export async function generateAuditPDF(data: AuditReportData): Promise<void> {
   const ageYears = (data.walletAgeDays / 365).toFixed(1);
   const ageTag = data.walletAgeDays > 365 ? "LOW" : data.walletAgeDays > 90 ? "MEDIUM" : "HIGH";
   const ageTagColor = data.walletAgeDays > 365 ? COLORS.success : data.walletAgeDays > 90 ? COLORS.warning : COLORS.danger;
-  y = metricRow(doc, y, "Wallet Age", `${data.walletAgeDays.toLocaleString()} Days (${ageYears} yrs)`, ageTag, ageTagColor);
+  y = metricRow(doc, y, "Wallet Age", `${data.walletAgeDays.toLocaleString("en-US")} Days (${ageYears} yrs)`, ageTag, ageTagColor);
 
   // Transaction Density row
   const density = (data.txCount / Math.max(data.walletAgeDays, 1)).toFixed(2);
   const densityTag = data.txCount > 100 ? "LOW" : data.txCount > 20 ? "MEDIUM" : "HIGH";
   const densityTagColor = data.txCount > 100 ? COLORS.success : data.txCount > 20 ? COLORS.warning : COLORS.danger;
-  y = metricRow(doc, y, "Transaction Density", `${data.txCount.toLocaleString()} Txs / ${density} per day`, densityTag, densityTagColor);
+  y = metricRow(doc, y, "Transaction Density", `${data.txCount.toLocaleString("en-US")} Txs / ${density} per day`, densityTag, densityTagColor);
 
   // Chain Diversity row
   const chainNames = data.chainBreakdown.filter(c => c.txCount > 0).map(c => c.name).join(", ");
@@ -365,7 +365,7 @@ export async function generateAuditPDF(data: AuditReportData): Promise<void> {
     doc.setFont("helvetica", "normal");
     doc.setFontSize(7.5);
     doc.setTextColor("#64748b");
-    doc.text(`${chain.txCount.toLocaleString()} txs  |  ${chainVol} ETH  |  ${pct}%`, 55, y);
+    doc.text(`${chain.txCount.toLocaleString("en-US")} txs  |  ${chainVol} ETH  |  ${pct}%`, 55, y);
 
     // Progress bar
     roundedRect(doc, 120, y - 2.5, 60, 4, 1, "#e2e8f0");

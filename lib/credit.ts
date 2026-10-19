@@ -393,7 +393,7 @@ export function calculateCreditScore(m: CreditMetrics, behaviouralScore: number 
           max: WEIGHTS.buffer,
           detail:
             m.totalCollateralUsd > 0
-              ? `$${Math.round(m.totalCollateralUsd).toLocaleString()} supplied, nothing borrowed against it`
+              ? `$${Math.round(m.totalCollateralUsd).toLocaleString("en-US")} supplied, nothing borrowed against it`
               : "No supplied collateral found on any readable chain",
         },
         {
@@ -471,7 +471,7 @@ export function calculateCreditScore(m: CreditMetrics, behaviouralScore: number 
       label: "Borrowing Headroom",
       value: Math.round(headroom),
       max: WEIGHTS.headroom,
-      detail: `$${Math.round(m.totalAvailableBorrowsUsd).toLocaleString()} still available to draw`,
+      detail: `$${Math.round(m.totalAvailableBorrowsUsd).toLocaleString("en-US")} still available to draw`,
     },
     {
       key: "spread",
@@ -529,7 +529,7 @@ export function buildCreditNarrative(m: CreditMetrics, r: CreditResult): string 
   }
   if (!m.hasDebt) {
     return (
-      `$${Math.round(m.totalCollateralUsd).toLocaleString()} supplied across ` +
+      `$${Math.round(m.totalCollateralUsd).toLocaleString("en-US")} supplied across ` +
       `${m.chainsWithCollateral} chain${m.chainsWithCollateral === 1 ? "" : "s"} with no debt drawn — ` +
       `no liquidation exposure, and no repayment record to judge.`
     );
@@ -537,8 +537,8 @@ export function buildCreditNarrative(m: CreditMetrics, r: CreditResult): string 
 
   const hf = m.minHealthFactor as number;
   return (
-    `$${Math.round(m.totalDebtUsd).toLocaleString()} borrowed against ` +
-    `$${Math.round(m.totalCollateralUsd).toLocaleString()} of collateral ` +
+    `$${Math.round(m.totalDebtUsd).toLocaleString("en-US")} borrowed against ` +
+    `$${Math.round(m.totalCollateralUsd).toLocaleString("en-US")} of collateral ` +
     `(${Math.round(m.debtToCollateral * 100)}% debt-to-collateral) across ` +
     `${m.chainsWithDebt} chain${m.chainsWithDebt === 1 ? "" : "s"}. ` +
     `Weakest health factor ${hf.toFixed(2)}, placing modelled liquidation risk at ` +

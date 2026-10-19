@@ -50,8 +50,16 @@ const RISK_STYLE: Record<LiquidationRisk, { text: string; bg: string; border: st
   none: { text: "text-tertiary/60", bg: "bg-white/5", border: "border-white/10", label: "No debt" },
 };
 
+/**
+ * Locale is pinned rather than left to the host.
+ *
+ * Narrative strings are formatted on the server and card values in the
+ * browser, so an unpinned locale rendered the same figure two ways on one
+ * page — "$530,586" in a card beside "$5,30,586" in the sentence below it,
+ * because Node here resolves to en-IN and the browser to en-US.
+ */
 const usd = (n: number) =>
-  n >= 1000 ? `$${Math.round(n).toLocaleString()}` : `$${n.toFixed(2)}`;
+  n >= 1000 ? `$${Math.round(n).toLocaleString("en-US")}` : `$${n.toFixed(2)}`;
 
 function CreditReport() {
   const params = useSearchParams();
@@ -105,25 +113,37 @@ function CreditReport() {
     };
   }, [address]);
 
+  /*
+   * Every return path uses the same wrapper as the other dashboard pages.
+   * `lg:ml-64` clears the fixed sidebar and `pt-24` clears the top nav —
+   * without both, the nav renders on top of the content.
+   */
   if (!address) {
     return (
-      <div className="p-8 text-center text-on-surface-variant">
-        Connect a wallet or pass <span className="font-mono text-primary">?address=0x…</span> to pull a credit report.
-      </div>
+      <main className="lg:ml-64 pt-24 pb-12 px-8 min-h-screen flex items-center justify-center">
+        <div className="text-center text-on-surface-variant">
+          Connect a wallet or pass <span className="font-mono text-primary">?address=0x…</span> to pull a credit report.
+        </div>
+      </main>
     );
   }
 
   if (loading) {
     return (
-      <div className="p-8 text-center text-on-surface-variant animate-pulse">
-        Reading live lending positions across 10 chains…
-      </div>
+      <main className="lg:ml-64 pt-24 pb-12 px-8 min-h-screen flex flex-col items-center justify-center gap-4">
+        <div className="w-16 h-16 border-4 border-primary/20 border-t-primary rounded-full animate-spin"></div>
+        <div className="text-sm text-on-surface-variant">Reading live lending positions across 10 chains…</div>
+      </main>
     );
   }
 
   if (error) {
     return (
-      <div className="p-6 m-6 rounded-2xl bg-error/10 border border-error/20 text-error text-sm">{error}</div>
+      <main className="lg:ml-64 pt-24 pb-12 px-8 min-h-screen">
+        <div className="bg-error/10 border border-error/20 rounded-2xl p-6 max-w-2xl mx-auto mt-12 text-center text-error text-sm">
+          {error}
+        </div>
+      </main>
     );
   }
 
@@ -132,10 +152,11 @@ function CreditReport() {
   const risk = RISK_STYLE[data.risk];
 
   return (
-    <div className="p-6 lg:p-8 flex flex-col gap-6 max-w-6xl">
+    <main className="lg:ml-64 pt-24 pb-12 px-8 lg:px-10 min-h-screen">
+      <div className="flex flex-col gap-6 max-w-6xl">
       <div>
         <h1 className="font-headline text-2xl uppercase tracking-widest text-primary">Credit Report</h1>
-        <p className="text-xs text-on-surface-variant mt-1 font-mono">{data.address}</p>
+        <p className="text-xs text-on-surface-variant mt-1 font-mono break-all">{data.address}</p>
       </div>
 
       {/* Headline score + risk band */}
@@ -259,7 +280,8 @@ function CreditReport() {
           ))}
         </ul>
       </div>
-    </div>
+      </div>
+    </main>
   );
 }
 
