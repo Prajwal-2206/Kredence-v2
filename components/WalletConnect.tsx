@@ -56,14 +56,29 @@ function styleFor(name: string) {
  * to whichever extension happens to own window.ethereum.
  */
 function usableConnectors(connectors: readonly Connector[]): Connector[] {
-  const seen = new Set<string>();
-  const unique = connectors.filter((c) => {
+  /*
+   * When a wallet is advertised twice under one name, keep the EIP-6963
+   * entry. A browser with the MetaMask extension installed yields both the
+   * discovered injected connector and wagmi's SDK-backed `metaMask` one, and
+   * the SDK path lazily imports @metamask/connect-evm and routes through
+   * MetaMask's relay. Connecting straight to the installed extension is
+   * faster and has fewer moving parts, so discovery wins the tie.
+   */
+  const best = new Map<string, Connector>();
+  for (const c of connectors) {
     const key = c.name.toLowerCase().trim();
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
+    const existing = best.get(key);
+    if (!existing) {
+      best.set(key, c);
+      continue;
+    }
+    if (existing.type !== "injected" && c.type === "injected") best.set(key, c);
+  }
 
+  const unique = [...best.values()];
+
+  // The bare "Injected" entry routes to whichever extension currently owns
+  // window.ethereum, so it is only offered when nothing named was found.
   const named = unique.filter((c) => !/^injected$/i.test(c.name));
   return named.length > 0 ? named : unique;
 }
